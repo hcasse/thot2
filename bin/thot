@@ -1,0 +1,144 @@
+#!/usr/bin/python3
+# -*- coding: utf-8 -*-
+
+# thot -- Thot command
+# Copyright (C) 2009  <hugues.casse@laposte.net>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import optparse
+import os.path
+
+import thot
+from thot.common import *
+from thot.db import *
+from thot.ui import *
+import thot.doc as doc
+import thot.tparser as tparser
+
+# initialize the document base
+db = DB()
+document = doc.Document(db)
+
+# parse arguments
+oparser = optparse.OptionParser()
+oparser.add_option("-t", "--type", action="store", dest="out_type",
+	default="html", help="output type (xml, html, latex, ...)")
+oparser.add_option("-o", "--out", action="store", dest="out_path",
+	help="output path")
+oparser.add_option("-D", "--define", action="append", dest="defines",
+	help="add the given definition to the document environment.")
+oparser.add_option("--dump", dest = "dump", action="store_true", default=False,
+	help="only for debugging purpose, dump the database of Thot")
+oparser.add_option("-u", "--use", action="append", dest="uses",
+	help="given module is loaded before the generation.")
+oparser.add_option("--verbose", "-v", dest = "verbose", action="store_true", default=False,
+	help="display verbose messages about the processing")
+oparser.add_option("--encoding", "-e", dest="encoding", action="store",
+	type="string", help="select the encoding of the input files (default UTF-8)")
+oparser.add_option("--list-mods", dest = "list_mods", action="store_true", default=False,
+	help="list used modules")
+oparser.add_option("--list-syntax", dest = "list_syntax", action="store_true", default=False,
+	help="list available syntax in the document")
+oparser.add_option("--list-output", action="store", dest="list_output",
+	help="list all generation output for the current modules")
+oparser.add_option("--list-mod", action="store", dest="list_mod",
+	help="list the content of a module")
+oparser.add_option("--list-avail", dest = "list_avail", action="store_true", default=False,
+	help="list available modules")
+
+(options, args) = oparser.parse_args()
+
+# manage options
+db.set_verbose(options.verbose)
+if options.encoding:
+	db["ENCODING"] = options.encoding
+db["THOT_OUT_TYPE"] = options.out_type
+if not options.out_path:
+	db["THOT_OUT_PATH"] = ""
+else:
+	db["THOT_OUT_PATH"] = options.out_path
+if args == []:
+	input = sys.__stdin__
+	document["THOT_FILE"] = "<stdin>"
+	db["THOT_DOC_DIR"] = "."
+else:
+	input = open(args[0])
+	document["THOT_FILE"] = args[0]
+	db["THOT_DOC_DIR"] = os.path.dirname(args[0])
+	if db["THOT_DOC_DIR"] == None:
+		db["THOT_DOC_DIR"] = "."
+if options.defines:
+	for d in options.defines:
+		p = d.find('=')
+		if p == -1:
+			db.onError('-D' + d + ' must follow syntax -Didentifier=value')
+		else:
+			db[d[:p]] = d[p+1:]
+
+# open the output
+#document = doc.Document(db)
+#out_name = db["THOT_OUT_TYPE"]
+#out_path = os.path.join(db["THOT_LIB"], "backs")
+#out_driver = common.load_module(out_name,  out_path)
+#if not out_driver:
+#	db.onError('cannot find %s back-end' % out_name)
+
+# list available modules
+if options.list_avail:	
+	list_available_modules(db, db)
+	sys.exit(0)
+
+# list a module
+elif options.list_mod:
+	list_module_content(options.list_mod, db, db)
+	sys.exit(0)
+
+# Parse the file
+parser = tparser.Manager(document, db)
+#if "init" in out_driver.__dict__:
+#	out_driver.init(man)
+#if options.uses:
+#	for u in options.uses:
+#		man.use(u)
+parser.parse(input, db['THOT_FILE'])
+
+# dump the parsed document
+if options.dump:
+	document.dump("")
+	sys.exit(0)
+
+# list the syntax
+elif options.list_syntax:
+	list_available_syntax(parser, db)
+	sys.exit(0)
+
+# list outputs
+elif options.list_output:
+	list_outputs(document, db)
+	sys.exit(0)
+
+# list the involved modules
+elif options.list_mods:
+	list_modules(document, db)
+	sys.exit(0)
+
+# Output the result
+else:
+	pass
+	#try:
+	#	out_driver.output(document)
+	#except common.BackException as e:
+	#	common.onError(str(e))
+

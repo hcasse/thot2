@@ -1,0 +1,25 @@
+@use dokuwiki
+@TITLE=Test for dokuwiki syntax
+@LANG=en_EN
+
+This a simple test.
+
+====== Style test ======
+
+**This** is the first section.
+
+//Here// an italic test.
+
+
+
+====== List styles ======
+
+Item list:
+  * item 1
+  * item 2
+  * item 3
+
+Numbered list:
+  - item 1
+  - item 2
+  - item 3
