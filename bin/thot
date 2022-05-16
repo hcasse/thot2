@@ -121,7 +121,7 @@ if options.dump:
 
 # list the syntax
 elif options.list_syntax:
-	list_available_syntax(parser, db)
+	list_available_syntax(document, db)
 	sys.exit(0)
 
 # list outputs

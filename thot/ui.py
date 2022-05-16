@@ -23,9 +23,19 @@ import re
 import sys
 
 from thot.common import *
+import thot.tparser as tparser
 
 
 # ANSI coloration
+def supports_ansi():
+	plat = sys.platform
+	supported_platform = plat != 'Pocket PC' and \
+		(plat != 'win32' or 'ANSICON' in os.environ)
+	is_a_tty = hasattr(sys.stdout, 'isatty') and sys.stdout.isatty()
+	return supported_platform and is_a_tty
+
+IS_ANSI = supports_ansi()
+
 NORMAL = "\033[0m"
 """Switch back console display to normal mode."""
 BOLD = "\033[1m"
@@ -181,9 +191,25 @@ class UI:
 		self.print_action_final(msg + RED + BOLD + "[FAILED]" + NORMAL)
 
 	def print(self, msg):
-		self.out.writeln(msg + "\n")
+		self.out.write(msg + "\n")
 
 DEF = UI()
+
+SLASH_COLOR = "\033[4m"
+VAR_COLOR = "\033[3m"
+slash_re = re.compile("\\\\(.)")
+slash_rep = SLASH_COLOR + "\\1" + NORMAL
+var_re = re.compile("\\/([a-zA-Z][a-zA-Z0-9]*)\\/")
+var_rep = VAR_COLOR + "\\1" + NORMAL
+def decorate_syntax(t):
+	"""Colorize, if available, escaped special characters."""
+	l = len(t)
+	if not IS_ANSI:
+		return (l, t)
+	else:
+		(t, cs) = slash_re.subn(slash_rep, t)
+		(t, cv) = var_re.subn(var_rep, t)
+		return (l - cs - 2 * cv, t)
 
 
 arg_re = re.compile("\(\?P<([a-zA-Z0-9]+)(_[a-zA-Z0-9_]*)?>(%s|%s)*\)" %
@@ -243,19 +269,19 @@ def list_available_modules(env, ui):
 	"""List available modules."""
 	
 	ui.print("Available modules:")
-	paths = env("THOT_USE_PATH")
+	paths = env["THOT_USE_PATH"]
 	names = set([os.path.splitext(file)[0]
 		for path in paths.split(":") for file in os.listdir(path)
 			if os.path.splitext(file)[1] in { ".py" } and not file.startswith("__")])
 	for name in names:
-		mod = common.load_module(name, paths)
+		mod = load_module(name, paths)
 		desc = ""
 		if "__short__" in mod.__dict__:
 			desc = " (%s)" % mod.__short__
 		ui.print("- %s%s" % (name, desc))
 
 	ui.print("\nAvailable back-ends:")
-	path = os.path.join(document.env["THOT_LIB"], "backs")
+	path = os.path.join(env["THOT_LIB"], "backs")
 	names = set([os.path.splitext(file)[0]
 		for file in os.listdir(path)
 			if os.path.splitext(file)[1] in { ".py" }
@@ -270,7 +296,7 @@ def list_available_modules(env, ui):
 
 def list_module_content(name, env, ui):
 	"""Print the description of a module."""
-	paths = env("THOT_USE_PATH") + ":" + os.path.join(env["THOT_LIB"], "backs")
+	paths = env["THOT_USE_PATH"] + ":" + os.path.join(env["THOT_LIB"], "backs")
 	mod = load_module(name, paths)
 	if not mod:
 		ui.print_error("no module named %s" % name)
@@ -278,22 +304,22 @@ def list_module_content(name, env, ui):
 	short = ""
 	if "__short__" in mod.__dict__:
 		short = " (%s)" % mod.__short__
-	ui.print("Module: %s%s" % (options.list_mod, short))
+	ui.print("Module: %s%s" % (name, short))
 	if "__description__" in mod.__dict__:
 		ui.print("\n%s" % mod.__description__)
 	syn = []
 	if "__words__" in mod.__dict__:
 		for (_, word, desc) in mod.__words__:
-			syn.append((common.prepare_syntax(word), desc))
+			syn.append((prepare_syntax(word), desc))
 	if "__lines__" in mod.__dict__:
 		for (_, line, desc) in mod.__lines__:
-			syn.append((common.prepare_syntax(line), desc))
+			syn.append((prepare_syntax(line), desc))
 	if "__syntaxes__" in mod.__dict__:
 		for m in mod.__syntaxes__:
 			syn = syn + m.get_doc()
 	if syn != []:
 		ui.print("Syntax:")
-		common.display_syntax(syn)
+		display_syntax(syn, ui)
 	has_output = False
 	for out in ["html", "latex", "docbook"]:
 		name = "__%s__" % out
@@ -306,11 +332,11 @@ def list_module_content(name, env, ui):
 				ui.print("\t%s\n\t\t%s" % (form, desc))
 
 
-def list_available_syntax(parser, ui):
+def list_available_syntax(doc, ui):
 	"""List syntax available in the current parser."""
 	ui.print("Available syntax:")
 	syn = []
-	for mod in parser.used_mods + [tparser]:
+	for mod in doc.get_uses() + [tparser]:
 		if "__words__" in mod.__dict__:
 			syn = syn + [(prepare_syntax(w), d) for (_, w, d) in mod.__words__] 
 		if "__lines__" in mod.__dict__:
@@ -319,7 +345,7 @@ def list_available_syntax(parser, ui):
 			for s in mod.__syntaxes__:
 				syn = syn + s.get_doc()
 	if syn != []:
-		display_syntax(syn)
+		display_syntax(syn, ui)
 
 
 def list_outputs(doc, ui):
@@ -336,7 +362,7 @@ def list_outputs(doc, ui):
 def list_modules(doc, ui):
 	"""List the modules used in the document."""
 	ui.print("Used modules:")
-	for mod in man.get_uses():
+	for mod in doc.get_uses():
 		desc = ""
 		if "__short__" in mod.__dict__:
 			desc = " (%s)" % mod.__short__
