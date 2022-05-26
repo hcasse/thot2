@@ -25,6 +25,7 @@ import os.path
 import thot
 from thot.common import *
 from thot.ui import *
+from thot import i18n
 
 
 class DB(MapEnvironment, UI):
@@ -45,9 +46,10 @@ class DB(MapEnvironment, UI):
 		self["THOT_LIB"] = os.path.abspath(os.path.dirname(thot.__file__))
 		self["THOT_USE_PATH"] = self["THOT_LIB"] + "/mods/"
 		self["THOT_DATE"] = str(datetime.datetime.today())
+
 	def get_rootdir(self):
 		"""Get the root directory."""
-		return self.get_rootdir()
+		return self.rootdir
 
 	def set_rootdir(self, path):
 		"""Set the root directory."""
@@ -86,6 +88,6 @@ class DB(MapEnvironment, UI):
 		try:
 			return self.langs[lang]
 		except:
-			t = i18n.get_translator(lang)
+			t = i18n.get_translator(lang, self)
 			self.langs[lang] = t
 			return t

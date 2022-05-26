@@ -190,3 +190,50 @@ def load_module(name, paths):
 		tb = sys.exc_info()[2]
 		traceback.print_tb(tb)
 		raise ThotException("cannot open module '%s': %s" % (path, str(e)))
+
+
+STANDARD_VARS = [
+	("AUTHORS",			"authors of the document (',' separated, name <email>)"),
+	("LANG",			"lang of the document"),
+	("LOGO",			"logos of the supporting organization"),
+	("ORGANIZATION",	"organization producing the document"),
+	("SUBTITLE",		"sub-title of the document"),
+	("THOT_FILE",		"used to derivate the THOT_OUT_PATH if not set"),
+	("THOT_OUT_PATH",	"output directory path"),
+	("TITLE",			"title of the document"),
+]
+
+
+def make_var_doc(custom):
+	"""Generate documentation text for variables (for __description__
+	building). The documented variables includes standard variables
+	and custom variables."""
+	vars = STANDARD_VARS + custom
+	vars.sort()
+	imax = max([len(i) for (i, _) in vars])
+	d = ""
+	for (i, id) in vars:
+		d += "%s:%s %s\n" % (i, " " * (imax - len(i)), id)
+	return d
+
+
+AUTHOR_RE = re.compile('(.*)\<([^>]*)\>\s*')
+def scanAuthors(text):
+	"""Scan the author text to get structured representation of authors.
+	text -- text containing author declaration separated by ','
+	and with format "NAME <EMAIL>"
+	Return a list of authors where each author dictionary
+	containing 'name' and 'email' keys."""
+
+	authors = []
+	words = text.split(',')
+	for word in words:
+		author = {}
+		match = AUTHOR_RE.match(word)
+		if not match:
+			author['name'] = word
+		else:
+			author['name'] = match.group(1)
+			author['email'] = match.group(2)
+		authors.append(author)
+	return authors

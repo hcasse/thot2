@@ -241,17 +241,13 @@ class QuoteEvent(Event):
 class Info:
 	info = None
 
-	def setInfo(self, id, val):
-		"""Deprecated."""
-		self.set_info(id, val)
-		
 	def set_info(self, id, val):
 		"""Set an information value."""
 		if not self.info:
 			self.info = { }
 		self.info[id] = val
 	
-	def appendInfo(self, id, val):
+	def append_info(self, id, val):
 		"""Append the given value to identifier with identifier processed as a list."""
 		if not self.info:
 			self.info = { }
@@ -260,10 +256,6 @@ class Info:
 		except KeyError:
 			self.info[id] = [ val ]
 			
-	def getInfo(self, id, dflt = None):
-		"""Deprecated."""
-		return self.get_info(id, dflt)
-	
 	def get_info(self, id, dflt = None):
 		"""Get an information value. None if it not defined."""
 		if not self.info:
@@ -273,7 +265,7 @@ class Info:
 		except KeyError:
 			return dflt
 
-	def mergeInfo(self, info):
+	def merge_info(self, info):
 		"""Merge the given information with the current one."""
 		if info.info:
 			for k in info.info.keys():
@@ -328,8 +320,8 @@ class Node(Info):
 		"""For a header node, get the level."""
 		return -1
 
-	def genTitle(self, gen):
-		"""generate the title for a header node."""
+	def get_title(self):
+		"""Get the title for a header node."""
 		return None
 
 	def getContent(self):
@@ -584,6 +576,9 @@ class Style(Container):
 			man.pop()
 		else:
 			self.add(man, event.make())
+
+	def get_style(self):
+		return self.style
 
 	def dumpHead(self, tab):
 		print(tab + "style(" + self.style + ",")
@@ -888,6 +883,9 @@ class List(Container):
 		"""Get the list of items in the list."""
 		return self.content
 
+	def get_kind(self):
+		return self.kind
+
 	def gen(self, gen):
 		gen.genList(self)
 
@@ -1155,9 +1153,8 @@ class Header(Container):
 	def getTitle(self):
 		return self.title
 
-	def genTitle(self, gen):
-		for item in self.title.getContent():
-			item.gen(gen)
+	def get_title(self):
+		return self.title
 
 	def genBody(self, gen):
 		Container.gen(self, gen)
@@ -1219,15 +1216,20 @@ class Document(Container, common.MapEnvironment):
 
 	def __init__(self, db):
 		Container.__init__(self)
+		common.MapEnvironment.__init__(self, db)
 		self.db = db
 		self.features = []
 		self.labels = { }
 		self.inv_labels = { }
 		self.uses = []
-		common.MapEnvironment.__init__(self, db)
+		self.files = []
 
 	def get_name(self):
 		return self["THOT_FILE"]
+
+	def add_file(self, path):
+		"""Add a file as used to build the document."""
+		self.files.append(path)
 
 	def use(self, mod):
 		"""Add a used module."""
@@ -1236,7 +1238,11 @@ class Document(Container, common.MapEnvironment):
 	def get_uses(self):
 		"""Get the list of modules used by this document."""
 		return self.uses
-	
+
+	def get_base(self):
+		"""Get the current document base."""
+		return self.db
+
 	def onEvent(self, man, event):
 		if event.level is L_WORD:
 			self.add(man, Par())
@@ -1265,12 +1271,12 @@ class Document(Container, common.MapEnvironment):
 		for feature in self.features:
 			feature.prepare(gen)
 
-	def addLabel(self, label, node):
+	def add_label(self, label, node):
 		"""Add a label for the given node."""
 		self.labels[label] = node
 		self.inv_labels[node] = label
 	
-	def getLabel(self, label):
+	def get_label(self, label):
 		"""Find the node matching the given label.
 		Return None if there is no node matching the label."""
 		if label in self.labels:
@@ -1278,7 +1284,7 @@ class Document(Container, common.MapEnvironment):
 		else:
 			return None
 
-	def getLabelFor(self, node):
+	def get_label_for(self, node):
 		"""Get the label, if any, for the given node."""
 		if node in self.inv_labels:
 			return self.inv_labels[node]

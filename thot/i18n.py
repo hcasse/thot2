@@ -81,13 +81,13 @@ class DefaultTranslator(DictTranslator):
 		DictTranslator.__init__(self, ALL)
 
 
-def get_translator(lang):
+def get_translator(lang, db):
 	"""Get the translator for the given language."""
 	nlang = lang.lower().replace('-', '_')
 	
 	# look for the local version
-	path = os.path.join(doc.getVar('THOT_BASE'), "langs")
-	mod = common.loadModule(nlang, path)
+	path = os.path.join(db['THOT_BASE'], "langs")
+	mod = common.load_module(nlang, path)
 	if mod:
 		return mod.getTranslator(doc, nlang)
 	
@@ -112,4 +112,4 @@ def getTranslator(doc):
 	if not lang:
 		lang, _ = locale.getdefaultlocale()
 		sys.stderr.write("INFO: using default language: " + lang + "\n")
-	return get_translator(lang)
+	return get_translator(lang, doc.get_base())

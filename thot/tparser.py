@@ -203,7 +203,6 @@ class Manager:
 	item = None
 	items = None
 	parser = None
-	#doc = None
 	lines = None
 	words = None
 	words_re = None

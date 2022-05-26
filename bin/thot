@@ -30,6 +30,7 @@ import thot.tparser as tparser
 # initialize the document base
 db = DB()
 document = doc.Document(db)
+ui = UI()
 
 # parse arguments
 oparser = optparse.OptionParser()
@@ -89,11 +90,6 @@ if options.defines:
 
 # open the output
 #document = doc.Document(db)
-#out_name = db["THOT_OUT_TYPE"]
-#out_path = os.path.join(db["THOT_LIB"], "backs")
-#out_driver = common.load_module(out_name,  out_path)
-#if not out_driver:
-#	db.onError('cannot find %s back-end' % out_name)
 
 # list available modules
 if options.list_avail:	
@@ -136,9 +132,16 @@ elif options.list_mods:
 
 # Output the result
 else:
-	pass
-	#try:
-	#	out_driver.output(document)
-	#except common.BackException as e:
-	#	common.onError(str(e))
+	try:
+		out_name = document["THOT_OUT_TYPE"]
+		out_path = os.path.join(document["THOT_LIB"], "backs")
+		out_driver = load_module(out_name,  out_path)
+		if not out_driver:
+			ui.print_error('cannot find %s back-end' % out_name)
+			exit(1)
+		out_driver.output(document, ui)
+	except BackException as e:
+		ui.print_error(str(e))
+		exit(2)
+
 
