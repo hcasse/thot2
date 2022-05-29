@@ -153,11 +153,11 @@ class UI:
 			sys.stderr.write(BOLD + YELLOW + "WARNING: " + str(msg) + NORMAL + "\n")
 			sys.stderr.flush()
 
-	def print_success(self, msg):
+	def print_success(self, msg = "[OK]"):
 		"""Print a success message."""
 		if not self.complete_quiet:
 			self.handle_action()
-			sys.stderr.write(BOLD + GREEN + "[100%] " + msg + str(NORMAL) + "\n")
+			sys.stderr.write(BOLD + GREEN + msg + str(NORMAL) + "\n")
 			sys.stderr.flush()
 
 	def print_action(self, msg):

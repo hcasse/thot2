@@ -292,14 +292,20 @@ class Policy(html.Manager, PageHandler):
 	def get_authors(self):
 		return self.doc['AUTHORS']
 
-	def open_out(self, suff = ""):
-		"""Open an output file."""
+	def make_out_path(self, suff = ""):
+		"""Build output path name."""
 		if self.in_place:
 			path = os.path.splitext(self.doc.get_name())[0]
 		else:
 			path = os.path.join(self.out_dir,
 				os.path.relpath(self.doc.get_name(), self.root_dir))
-		self.out_path = path + suff + ".html"
+		return path + suff + ".html"
+
+	def open_out(self, path = None):
+		"""Open an output file."""
+		if not path:
+			path = self.make_out_path()
+		self.out_path = path
 		try:
 			self.out = open(self.out_path, "w")
 		except OSError as e:
@@ -381,6 +387,10 @@ class Policy(html.Manager, PageHandler):
 	def get_toc_label(self):
 		return self.db.get_translator(self.doc).get(i18n.ID_CONTENT)
 
+	def make_ref(self, nums):
+		"""Generate a reference from an header number array."""
+		return ".".join([str(i) for i in nums])
+
 
 class AllInOne(Policy):
 	"""Simple page policy doing nothing: only one page."""
@@ -391,10 +401,6 @@ class AllInOne(Policy):
 	def gen_refs(self, path):
 		"""Generate and return the references for the given generator."""
 		self.make_refs([1], { }, self.doc, path)
-
-	def make_ref(self, nums):
-		"""Generate a reference from an header number array."""
-		return ".".join([str(i) for i in nums])
 
 	def make_refs(self, nums, others, node, path):
 		"""Traverse the document tree and generate references in the given map."""
@@ -428,7 +434,10 @@ class AllInOne(Policy):
 				self.make_refs(nums, others, item, path)
 	
 	def gen_toc(self):
-		self.template.gen_toc(self)
+		if self.current == None:
+			self.template.gen_toc(self, [], 0)
+		else:
+			self.templaten.gen_toc(self, [self.current], 100)
 		
 	def gen_content(self):
 		for node in self.doc.getContent():
@@ -448,6 +457,174 @@ class AllInOne(Policy):
 		path, anchor = ref.split('#')
 		cpath = os.path.commonpath([path, self.out_path])
 		return path[len(cpath):] + '#' + anchor
+
+
+class PerChapter(Policy):
+	"""This page policy ensures there is one page per chapter."""
+	node = None
+	
+	def __init__(self, doc, ui):
+		Policy.__init__(self, doc, ui)
+
+	def gen_refs(self):
+		"""Generate and return the references for the given generator."""
+		self.make_refs([1], { }, self.doc, self.make_out_path())
+
+	def make_refs(self, nums, others, node, path):
+		"""Traverse the document tree and generate references in the given map."""
+		
+		# number for header
+		num = node.numbering()
+		if num == 'header':
+			if node.header_level == 0:
+				path = self.make_out_path("-%d" % (nums[0] - 1))
+			r = self.make_ref(nums)
+			node.set_info("number", r)
+			node.set_info("ref", path + "#" + r)
+			nums.append(1)
+			for item in node.getContent():
+				self.make_refs(nums, others, item, path)
+			nums.pop()
+			nums[-1] = nums[-1] + 1
+		
+		# number for embedded
+		else:
+			if self.doc.get_label_for(node):
+				if num:
+					if num not in others:
+						others[num] = 1
+						n = 1
+					else:
+						n = others[num] + 1
+					r = "%s-%d" % (num, n)
+					node.set_info("number", r)
+					node.set_info("ref", path + "#" + r)
+					others[num] = n
+			for item in node.getContent():
+				self.make_refs(nums, others, item, path)
+
+	def gen_toc(self):
+		self.template.gen_toc(self, [self.current], 100)
+		
+	def gen_content(self):
+		if self.current == None:
+			for node in self.doc.getContent():
+				if node.getHeaderLevel() == 0:
+					break
+				html.gen(self, node)
+		else:
+			html.gen(self, self.current)
+
+	def get_ref(self, node):
+		ref = node.get_info("ref")
+		if not ref:
+			return None
+		path, anchor = ref.split('#')
+		cpath = os.path.commonpath([path, self.out_path])
+		return path[len(cpath):] + '#' + anchor
+
+	def run(self):
+		chapters = []
+
+		# generate main page
+		path = self.make_out_path()
+		self.ui.print_command("generating %s" % path)
+		self.open_out(path)
+		self.gen_refs()
+		self.doc.pregen(self.db)
+		self.current = None
+		for node in self.doc.getContent():
+			if node.getHeaderLevel() == 0:
+				chapters.append(node)
+		self.template.apply(self)
+		self.close_out()
+		self.ui.print_success()
+
+		# generate chapter pages
+		for i in range(0, len(chapters)):
+			path = self.make_out_path("-%d" % i)
+			self.ui.print_command("generating %s" % path)
+			self.open_out(path)
+			self.current = chapters[i]
+			self.template.apply(self)
+			self.close_out()
+			self.ui.print_success()
+
+
+class PerSection(Policy):
+	"""This page policy ensures there is one page per section."""
+	node = None
+	
+	def __init__(self, doc, ui):
+		Policy.__init__(self, doc, ui)
+
+	def gen_refs(self):
+		"""Generate and return the references for the given generator."""
+		self.pages = [(self.make_out_path(), self.doc, [])]
+		self.make_refs([1], { }, self.doc, 0, [])
+
+	def make_refs(self, nums, others, node, pagenum, toc):
+		"""Traverse the document tree and generate references in the given map."""
+		
+		# number for header
+		if node.numbering() == 'header':
+			path = self.make_out_path("-%d" % pagenum)
+			toc = toc + [node]
+			pagenum = pagenum + 1
+			r = self.make_ref(nums)
+			node.set_info("number", r)
+			node.set_info("ref", path + "#" + r)
+			nums.append(1)
+			self.pages.append((path, node, toc))
+			for item in node.getContent():
+				pagenum = self.make_refs(nums, others, item, pagenum, toc)
+			nums.pop()
+			nums[-1] = nums[-1] + 1
+		
+		# number for embedded
+		else:
+			if self.doc.get_label_for(node):
+				if num:
+					if num not in others:
+						others[num] = 1
+						n = 1
+					else:
+						n = others[num] + 1
+					r = "%s-%d" % (num, n)
+					node.set_info("number", r)
+					node.set_info("ref", path + "#" + r)
+					others[num] = n
+			for item in node.getContent():
+				pagenum = self.make_refs(nums, others, item, pagenum, toc)
+
+		return pagenum
+
+	def gen_toc(self):
+		self.template.gen_toc(self, self.current[1], 1)
+		
+	def gen_content(self):
+		for node in self.current[0].getContent():
+			if node.getHeaderLevel() < 0:
+				html.gen(self, node)
+
+	def get_ref(self, node):
+		ref = node.get_info("ref")
+		if not ref:
+			return None
+		path, anchor = ref.split('#')
+		cpath = os.path.commonpath([path, self.out_path])
+		return path[len(cpath):] + '#' + anchor
+
+	def run(self):
+		self.gen_refs()
+		self.doc.pregen(self.db)
+		for (path, node, toc) in self.pages:
+			self.ui.print_command("generating %s" % path)
+			self.open_out(path)
+			self.current = (node, toc)
+			self.template.apply(self)
+			self.close_out()
+			self.ui.print_success()
 
 
 #------ plug-in interface ------
